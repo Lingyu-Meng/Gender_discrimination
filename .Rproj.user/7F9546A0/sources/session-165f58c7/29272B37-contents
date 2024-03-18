@@ -1,0 +1,1822 @@
+---
+title: "Supplemental materials of 'Meta-analysis of 44 years of field audits reveals a decline in gender discrimination across time'"
+author: 
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 1, digits = 3) # Round in text R output to 3 digits
+eval <- TRUE
+```
+
+# Setup   
+
+## Load packages
+
+```{r, message = FALSE}
+### Install packages when needed
+# install.packages(c("XLConnect", "weightr", "metafor", "puniform"))
+
+library(XLConnect)
+library(weightr)
+library(metafor)
+library(puniform)
+```
+
+## Load data
+
+```{r}
+wb <- loadWorkbook("Data_R1_v14.xlsx")
+dat <- readWorksheet(wb, sheet = "DATA")
+
+### Select the effect sizes for the main analysis
+dat <- subset(dat, dat$EffectsLevelData == 1)
+```
+
+\newpage
+
+## Compute log odds ratios and corresponding sampling variance
+
+Note that 0.5 was added to all cells of a study's 2x2 table before computing log odds ratio and sampling variances to decrease bias in the log odds ratio.
+
+```{r}
+dat <- escalc(ai = MaleSucc, bi = MaleFail, ci = FemaleSucc, di = FemaleFail, 
+              to = "all", measure = "OR", data = dat)
+```
+
+How many effect sizes does each study contribute to the meta-analysis?
+```{r}
+table(dat$StudyID)
+summary(as.numeric(table(dat$StudyID)))
+```
+
+\newpage
+
+# Multilevel meta-analyses
+
+## Hypothesis 1: Model 1a
+
+```{r, cache = TRUE}
+res1a_ml <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, data = dat)
+res1a_ml
+```
+
+```{r, cache = TRUE}
+confint(res1a_ml)
+```
+
+Predicted score in terms of average odds ratio is
+```{r}
+pred_ml <- predict(res1a_ml, transf = exp)
+pred_ml
+```
+
+Overall $I^2$-statistic:
+```{r}
+W <- diag(1/dat$vi)
+X <- model.matrix(res1a_ml)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(res1a_ml$sigma2) / (sum(res1a_ml$sigma2) + (res1a_ml$k-res1a_ml$p)/sum(diag(M)))
+```
+
+\newpage
+
+## Hypothesis 1: Model 1b
+
+```{r, cache = TRUE}
+res1b_ml <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                   mods = ~ AuthFemProp + IneqIndex + Moderators, data = dat)
+res1b_ml
+```
+
+```{r, cache = TRUE}
+confint(res1b_ml)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/dat$vi)
+X <- model.matrix(res1b_ml)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(res1b_ml$sigma2) / (sum(res1b_ml$sigma2) + (res1b_ml$k-res1b_ml$p)/sum(diag(M)))
+```
+
+\newpage
+
+## Hypothesis 2: Model 2a
+
+```{r, cache = TRUE}
+res2a_ml <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                   mods = ~ NonFemaleTyped, data = dat)
+res2a_ml
+```
+
+```{r, cache = TRUE}
+confint(res2a_ml)
+```
+
+Predicted score in terms of average odds ratio of stereotypical female jobs
+```{r}
+pred2_ml_female <- predict(res2a_ml, transf = exp, newmods = 0)
+pred2_ml_female
+```
+
+Predicted score in terms of average odds ratio of stereotypical male/gender-balanced jobs
+```{r}
+pred2_ml_male <- predict(res2a_ml, transf = exp, newmods = 1)
+pred2_ml_male
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/dat$vi)
+X <- model.matrix(res2a_ml)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(res2a_ml$sigma2) / (sum(res2a_ml$sigma2) + (res2a_ml$k-res2a_ml$p)/sum(diag(M)))
+```
+
+\newpage
+
+## Hypothesis 2: Model 2b
+
+```{r, cache = TRUE}
+res2b_ml <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                   mods = ~ NonFemaleTyped + AuthFemProp + IneqIndex + Moderators, 
+                   data = dat)
+res2b_ml
+```
+
+```{r, cache = TRUE}
+confint(res2b_ml)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/dat$vi)
+X <- model.matrix(res2b_ml)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(res2b_ml$sigma2) / (sum(res2b_ml$sigma2) + (res2b_ml$k-res2b_ml$p)/sum(diag(M)))
+```
+
+\newpage
+
+## Hypothesis 3: Model 3a
+
+```{r, cache = TRUE}
+### Center application year at the oldest study to avoid convergence issues
+dat$ApplicYearMost_center <- dat$ApplicYearMost-min(dat$ApplicYearMost)
+
+### Create a subset of only studies with stereotypical male or gender-balanced jobs
+sub <- subset(dat, dat$NonFemaleTyped == 1)
+
+res3a_ml <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                   mods = ~ ApplicYearMost_center, data = sub)
+res3a_ml
+```
+
+```{r}
+confint(res3a_ml)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/sub$vi)
+X <- model.matrix(res3a_ml)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(res3a_ml$sigma2) / (sum(res3a_ml$sigma2) + (res3a_ml$k-res3a_ml$p)/sum(diag(M)))
+```
+
+\newpage
+
+## Hypothesis 3: Model 3b
+
+```{r, cache = TRUE}
+res3b_ml <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                   mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                     Moderators, data = sub)
+res3b_ml
+```
+
+```{r}
+confint(res3b_ml)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/sub$vi)
+X <- model.matrix(res3b_ml)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(res3b_ml$sigma2) / (sum(res3b_ml$sigma2) + (res3b_ml$k-res3b_ml$p)/sum(diag(M)))
+```
+
+\newpage
+
+# Preregistered univariate meta-analyses
+
+## Hypothesis 1: Model 1a
+```{r}
+res1a <- rma(yi = yi, vi = vi, test = "knha", data = dat)
+res1a
+confint(res1a)
+```
+
+Predicted score in terms of average odds ratio is
+```{r}
+pred <- predict(res1a, transf = exp)
+pred
+```
+
+\newpage
+
+## Hypothesis 1: Model 1b
+
+```{r}
+res1b <- rma(yi = yi, vi = vi, mods = ~ AuthFemProp + IneqIndex + Moderators, 
+             test = "knha", data = dat)
+res1b
+confint(res1b)
+```
+
+\newpage
+
+## Hypothesis 2: Model 2a
+
+```{r}
+res2a <- rma(yi = yi, vi = vi, mods = ~ NonFemaleTyped, test = "knha", data = dat)
+res2a
+confint(res2a)
+```
+
+\newpage
+
+## Hypothesis 2: Model 2b
+
+```{r}
+res2b <- rma(yi = yi, vi = vi, mods = ~ NonFemaleTyped + AuthFemProp + IneqIndex + 
+               Moderators, test = "knha", data = dat)
+res2b
+confint(res2b)
+```
+
+\newpage
+
+## Hypothesis 3: Model 3a
+
+```{r}
+res3a <- rma(yi = yi, vi = vi, mods = ~ ApplicYearMost_center, test = "knha", data = sub)
+res3a
+confint(res3a)
+```
+
+\newpage
+
+## Hypothesis 3: Model 3b
+
+```{r}
+res3b <- rma(yi = yi, vi = vi, mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+               Moderators, test = "knha", data = sub)
+res3b
+confint(res3b)
+```
+
+\newpage
+
+# Preregistered analyses with publication year as moderator
+
+We preregistered to include publication year as moderator in the analyses. However, we realized that "year of application" is better to include, because there might be a large amount of time between when people applied for a job and when the paper was published. We report in this section the results of the preregistered analyses with publication year as moderator.
+
+## Hypothesis 3: Model 3a
+
+```{r, cache = TRUE}
+### Center publication year at the oldest study to avoid convergence issues
+sub$PubYear_center <- sub$PubYear-min(sub$PubYear)
+
+res3a_year <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                     mods = ~ PubYear_center, data = sub)
+res3a_year
+```
+
+```{r}
+confint(res3a_year)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/sub$vi)
+X <- model.matrix(res3a_year)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(res3a_year$sigma2) / (sum(res3a_year$sigma2) + (res3a_year$k-res3a_year$p)/sum(diag(M)))
+```
+
+\newpage
+
+## Hypothesis 3: Model 3b
+
+```{r, cache = TRUE}
+res3b_year <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                     mods = ~ PubYear_center + AuthFemProp + IneqIndex + 
+                       Moderators, data = sub)
+res3b_year
+```
+
+```{r}
+confint(res3b_year)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/sub$vi)
+X <- model.matrix(res3b_year)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(res3b_year$sigma2) / (sum(res3b_year$sigma2) + (res3b_year$k-res3b_year$p)/sum(diag(M)))
+```
+
+\newpage
+
+# Exploratory analyses
+
+## Is the time trend different for female, mixed, and male-typed jobs?
+
+We fit a multilevel meta-analysis model with the control variables and the interaction effect between ApplicYearMost_center and JobStereotype.
+
+```{r}
+expl <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+               mods = ~ ApplicYearMost_center*JobStereotype + 
+                 AuthFemProp + IneqIndex + Moderators, data = dat)
+summary(expl, digits = 3)
+```
+
+\newpage
+
+## Relationship between ApplicYearMost and odds ratio
+
+These codes create Figure 2 in the paper. The figure is based on the model used to test hypothesis 3 (independent variables ApplicYearMost_center, AuthFemProp, IneqIndex, and Moderators).
+
+```{r, fig.show = "hide"}
+plot3b_ml <- regplot(res3b_ml, mod = "ApplicYearMost_center", xaxt = "n", xlab = "Year of application", 
+                     transf = exp, ylim = c(0,3), las = 1, ylab = "Average Odds Ratio")
+```
+
+```{r}
+regplot(res3b_ml, mod = "ApplicYearMost_center", xaxt = "n", xlab = "Year of application", 
+        transf = exp, ylim = c(0,3), las = 1, ylab = "Average Odds Ratio", 
+        psize = 0.7*plot3b_ml$psize)
+axis(side = 1, at = seq(-1,44,5), labels = seq(1975,2020,5))
+
+### Horizontal line at an odds ratio of 1
+abline(h = 1, col = "gray40", lwd = 2, lty = 2)
+```
+
+The year of application where the regression line crosses the horizontal line at 1 is 2009
+```{r}
+predict(res3b_ml, transf = exp, newmods = c(33,mean(sub$AuthFemProp),
+                                            mean(sub$IneqIndex), 
+                                            mean(sub$Moderators)))
+predict(res3b_ml, transf = exp, newmods = c(34,mean(sub$AuthFemProp),
+                                            mean(sub$IneqIndex), 
+                                            mean(sub$Moderators)))
+1976+33
+```
+
+\newpage
+
+These codes create Figure 3 of the paper. The figure is based on a multilevel meta-analysis model with the independent variables ApplicYearMost_center, AuthFemProp, IneqIndex, and Moderators, but then for different subsets of the data. The top left panel is based on all data, top right is based on only the female-typed jobs, bottom left is based on male-type jobs, and bottom right is based on gender-balanced jobs.
+
+```{r, fig.show = "hide"}
+### Fit model based on all job types
+fig_all <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                  mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                    Moderators, data = dat)
+
+plot_all <- regplot(fig_all, mod = "ApplicYearMost_center", xaxt = "n", 
+                    xlim = c(0,44), xlab = "Year of application", transf = exp, 
+                    main = "All jobs", ylim = c(0, 3), las = 1, 
+                    ylab = "Average Odds Ratio", bg = "black")
+
+### Figure for female job type
+female <- subset(dat, JobStereotype == 0)
+
+### Fit model based on data female job type
+fig_female <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                     mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                       Moderators, data = female)
+
+plot_female <- regplot(fig_female, mod = "ApplicYearMost_center", xaxt = "n", 
+                       xlim = c(0,44), xlab = "Year of application", transf = exp, 
+                       main = "Female-typed jobs", ylim = c(0, 3), bg = "#009E73", 
+                       lcol = c("#009E73", "#009E73"), las = 1, ylab = "Average Odds Ratio")
+
+### Figure for male job type
+male <- subset(dat, JobStereotype == 1)
+
+### Fit model based on data male job type
+fig_male <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                   mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                     Moderators, data = male)
+
+plot_male <- regplot(fig_male, mod = "ApplicYearMost_center", xaxt = "n", 
+                     xlim = c(0,44), xlab = "Year of application", transf = exp, 
+                     main = "Male-typed jobs", ylim = c(0, 3), bg = "#D55E00", 
+                     lcol = c("#D55E00", "#D55E00"), las = 1, ylab = "Average Odds Ratio")
+
+### Figure for mixed job type
+mixed <- subset(dat, JobStereotype == 2)
+
+### Fit model based on data male job type
+fig_mixed <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                    mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                      Moderators, data = mixed)
+
+plot_mixed <- regplot(fig_mixed, mod = "ApplicYearMost_center", xaxt = "n", 
+                      xlim = c(0,44), xlab = "Year of application", transf = exp, 
+                      main = "Gender-balanced jobs", ylim = c(0, 3), bg = "#E69F00", 
+                      lcol = c("#E69F00", "#E69F00"), las = 1, ylab = "Average Odds Ratio")
+```
+
+```{r, echo = TRUE, fig.width=9, fig.height=8}
+par(mfrow = c(2,2))
+
+regplot(fig_all, mod = "ApplicYearMost_center", xaxt = "n", xlim = c(0,44), 
+        xlab = "Year of application", transf = exp, main = "All jobs", 
+        ylim = c(0, 3), las = 1, ylab = "Average Odds Ratio", bg = "black", 
+        psize = 0.7*plot_all$psize)
+axis(side = 1, at = seq(-1,44,5), labels = FALSE)
+text(x = seq(-1,44,5), y = -0.25, srt = 45, adj = 1, labels = seq(1975,2020,5), 
+     xpd = TRUE)
+
+### Horizontal line at an odds ratio of 1
+abline(h = 1, col = "gray40", lwd = 2, lty = 2)
+
+regplot(fig_female, mod = "ApplicYearMost_center", xaxt = "n", xlim = c(0,44), 
+        xlab = "Year of application", transf = exp, main = "Female-typed jobs", 
+        ylim = c(0, 3), bg = "#009E73", 
+        lcol = c("#009E73", "#009E73"), las = 1, ylab = "Average Odds Ratio",
+        psize = 0.7*plot_female$psize)
+axis(side = 1, at = seq(-1,44,5), labels = FALSE)
+text(x = seq(-1,44,5), y = -0.25, srt = 45, adj = 1, labels = seq(1975,2020,5), 
+     xpd = TRUE)
+
+### Horizontal line at an odds ratio of 1
+abline(h = 1, col = "gray40", lwd = 2, lty = 2)
+
+regplot(fig_male, mod = "ApplicYearMost_center", xaxt = "n", xlim = c(0,44), 
+        xlab = "Year of application", transf = exp, main = "Male-typed jobs", 
+        ylim = c(0, 3), bg = "#D55E00", 
+        lcol = c("#D55E00", "#D55E00"), las = 1, ylab = "Average Odds Ratio",
+        psize = 0.7*plot_male$psize)
+axis(side = 1, at = seq(-1,44,5), labels = FALSE)
+text(x = seq(-1,44,5), y = -0.25, srt = 45, adj = 1, labels = seq(1975,2020,5), 
+     xpd = TRUE)
+
+### Horizontal line at an odds ratio of 1
+abline(h = 1, col = "gray40", lwd = 2, lty = 2)
+
+regplot(fig_mixed, mod = "ApplicYearMost_center", xaxt = "n", xlim = c(0,44), 
+        xlab = "Year of application", transf = exp, main = "Gender-balanced jobs", 
+        ylim = c(0, 3), bg = "#E69F00", 
+        lcol = c("#E69F00", "#E69F00"), las = 1, ylab = "Average Odds Ratio",
+        psize = 0.7*plot_mixed$psize)
+axis(side = 1, at = seq(-1,44,5), labels = FALSE)
+text(x = seq(-1,44,5), y = -0.25, srt = 45, adj = 1, labels = seq(1975,2020,5), 
+     xpd = TRUE)
+
+### Horizontal line at an odds ratio of 1
+abline(h = 1, col = "gray40", lwd = 2, lty = 2)
+
+par(mfrow = c(1,1))
+```
+
+\newpage
+
+## Summary figure results
+
+Figure 4 of the paper is created with the codes below. Effect sizes are grouped depending on the year data were collected. Effect sizes within a bin are combined using a univariate random-effects model, and this average effect size is shown in the figure together with its 95\% confidence interval. The size of the symbols is proportional to the number of effect sizes in a meta-analysis. 
+
+```{r}
+breaks <- c(1900, 1991, 2000, 2009, 2018, 2022)
+
+out_all <- out_female <- out_male <- out_mixed <- 
+  matrix(NA, nrow = length(breaks)-1,
+         ncol = 4, 
+         dimnames = list(as.character(breaks[-1]), 
+                         c("est", "ci.lb", "ci.ub", "k")))
+
+
+for (b in 1:(length(breaks)-1))
+{
+  ### All combined
+  sub_break <- subset(dat, ApplicYearMost >= breaks[b] & ApplicYearMost < breaks[b+1])
+  out <- rma(yi = yi, vi = vi, test = "z", data = sub_break)
+  out_all[b, ] <- c(exp(out$b[1]), exp(out$ci.lb), exp(out$ci.ub), out$k)
+  
+  ### Female
+  sub_break <- subset(dat, ApplicYearMost >= breaks[b] & ApplicYearMost < breaks[b+1] &
+                        JobStereotype == 0)
+  
+  if (nrow(sub_break) > 0)
+  { # If statement is needed, because there are sometimes no female type studies
+    out <- rma(yi = yi, vi = vi, test = "z", data = sub_break)
+    out_female[b, ] <- c(exp(out$b[1]), exp(out$ci.lb), exp(out$ci.ub), out$k)
+  }
+  
+  ### Male
+  sub_break <- subset(dat, ApplicYearMost >= breaks[b] & ApplicYearMost < breaks[b+1] &
+                        JobStereotype == 1)
+  
+  if (nrow(sub_break) > 0)
+  { # If statement is needed, because there are sometimes no male type studies
+    out <- rma(yi = yi, vi = vi, test = "z", data = sub_break)
+    out_male[b, ] <- c(exp(out$b[1]), exp(out$ci.lb), exp(out$ci.ub), out$k)
+  }
+  
+  ### Mixed
+  sub_break <- subset(dat, ApplicYearMost >= breaks[b] & ApplicYearMost < breaks[b+1] &
+                        JobStereotype == 2)
+  
+  if (nrow(sub_break) > 0)
+  { # If statement is needed, because there are sometimes no mixed type studies
+    out <- rma(yi = yi, vi = vi, test = "z", data = sub_break)
+    out_mixed[b, ] <- c(exp(out$b[1]), exp(out$ci.lb), exp(out$ci.ub), out$k)
+  }
+  
+}
+
+cex <- 0.3
+
+psize <- function(k, cex) ifelse(cex*log(k)+0.6 > 2, 2, cex*log(k)+0.6)
+
+plot(x = -10, xlim = c(0, 27), ylim = c(0.28,3.57), ylab = "Average Odds Ratio", las = 1, 
+     xaxt = "n", xlab = "Year of application")
+points(x = seq(0,29,6), y = out_all[ ,"est"], pch = 16, 
+       cex = psize(k = out_all[ ,"k"], cex = cex))
+points(x = seq(1,29,6), y = out_female[ ,"est"], pch = 16, col = "#009E73", 
+       cex = psize(k = out_female[ ,"k"], cex = cex))
+points(x = seq(2,29,6), y = out_male[ ,"est"], pch = 16, col = "#D55E00", 
+       cex = psize(k = out_male[ ,"k"], cex = cex))
+points(x = seq(3,29,6), y = out_mixed[ ,"est"], pch = 16, col = "#E69F00", 
+       cex = psize(k = out_mixed[ ,"k"], cex = cex))
+
+axis(side = 1, at = seq(1.5,29.5,6), labels = c("Prior to 1991", "1991-1999", 
+                                                "2000-2008", "2009-2017", "2018-2020"),
+     lwd = 0)
+
+arrows(x0 = seq(0,29,6), y0 = out_all[ ,"ci.lb"], y1 = out_all[ ,"ci.ub"], code = 3,
+       angle = 90, length = 0.08)
+arrows(x0 = seq(1,29,6), y0 = out_female[ ,"ci.lb"], y1 = out_female[ ,"ci.ub"], code = 3,
+       angle = 90, length = 0.08, col = "#009E73")
+arrows(x0 = seq(2,29,6), y0 = out_male[ ,"ci.lb"], y1 = out_male[ ,"ci.ub"], code = 3,
+       angle = 90, length = 0.08, col = "#D55E00")
+arrows(x0 = seq(3,29,6), y0 = out_mixed[ ,"ci.lb"], y1 = out_mixed[ ,"ci.ub"], code = 3,
+       angle = 90, length = 0.08, col = "#E69F00")
+
+legend(x = "topright", legend = c("All jobs", "Female-typed jobs", "Male-typed jobs", 
+                                  "Gender-balanced jobs"), pch = c(16,16,16,16), 
+       col = c("black", "#009E73", "#D55E00", "#E69F00"), bty = "n")
+
+### Horizontal line at an odds ratio of 1
+abline(h = 1, col = "gray40", lwd = 1, lty = 2)
+```
+
+\newpage
+
+```{r}
+breaks <- c(1900, 2009, 2022)
+
+out_all <- out_female <- out_male <- out_mixed <- 
+  matrix(NA, nrow = length(breaks)-1,
+         ncol = 4, 
+         dimnames = list(c(as.character(breaks[-1])), 
+                         c("est", "ci.lb", "ci.ub", "k")))
+
+for (b in 1:(length(breaks)-1))
+{
+  ### All combined
+  sub_break <- subset(dat, ApplicYearMost >= breaks[b] & ApplicYearMost < breaks[b+1])
+  out <- rma(yi = yi, vi = vi, test = "z", data = sub_break)
+  out_all[b, ] <- c(exp(out$b[1]), exp(out$ci.lb), exp(out$ci.ub), out$k)
+  
+  ### Female
+  sub_break <- subset(dat, ApplicYearMost >= breaks[b] & ApplicYearMost < breaks[b+1] &
+                        JobStereotype == 0)
+  
+  if (nrow(sub_break) > 0)
+  { # If statement is needed, because there are sometimes no female type studies
+    out <- rma(yi = yi, vi = vi, test = "z", data = sub_break)
+    out_female[b, ] <- c(exp(out$b[1]), exp(out$ci.lb), exp(out$ci.ub), out$k)
+  }
+  
+  ### Male
+  sub_break <- subset(dat, ApplicYearMost >= breaks[b] & ApplicYearMost < breaks[b+1] &
+                        JobStereotype == 1)
+  
+  if (nrow(sub_break) > 0)
+  { # If statement is needed, because there are sometimes no male type studies
+    out <- rma(yi = yi, vi = vi, test = "z", data = sub_break)
+    out_male[b, ] <- c(exp(out$b[1]), exp(out$ci.lb), exp(out$ci.ub), out$k)
+  }
+  
+  ### Mixed
+  sub_break <- subset(dat, ApplicYearMost >= breaks[b] & ApplicYearMost < breaks[b+1] &
+                        JobStereotype == 2)
+  
+  if (nrow(sub_break) > 0)
+  { # If statement is needed, because there are sometimes no mixed type studies
+    out <- rma(yi = yi, vi = vi, test = "z", data = sub_break)
+    out_mixed[b, ] <- c(exp(out$b[1]), exp(out$ci.lb), exp(out$ci.ub), out$k)
+  }
+  
+}
+
+cex <- 0.3
+
+psize <- function(k, cex) ifelse(cex*log(k)+0.6 > 2, 2, cex*log(k)+0.6)
+
+plot(x = -10, xlim = c(0, 9), ylim = c(0.5,2), ylab = "Average Odds Ratio", las = 1, 
+     xaxt = "n", xlab = "Year of application")
+points(x = seq(0,9,6), y = out_all[ ,"est"], pch = 16, 
+       cex = psize(k = out_all[ ,"k"], cex = cex))
+points(x = seq(1,9,6), y = out_female[ ,"est"], pch = 16, col = "#009E73", 
+       cex = psize(k = out_female[ ,"k"], cex = cex))
+points(x = seq(2,9,6), y = out_male[ ,"est"], pch = 16, col = "#D55E00", 
+       cex = psize(k = out_male[ ,"k"], cex = cex))
+points(x = seq(3,9,6), y = out_mixed[ ,"est"], pch = 16, col = "#E69F00", 
+       cex = psize(k = out_mixed[ ,"k"], cex = cex))
+
+axis(side = 1, at = seq(1.5,9,6), labels = c("Prior to 2009", "2009-2020"),
+     lwd = 0)
+
+arrows(x0 = seq(0,9,6), y0 = out_all[ ,"ci.lb"], y1 = out_all[ ,"ci.ub"], code = 3,
+       angle = 90, length = 0.08)
+arrows(x0 = seq(1,9,6), y0 = out_female[ ,"ci.lb"], y1 = out_female[ ,"ci.ub"], code = 3,
+       angle = 90, length = 0.08, col = "#009E73")
+arrows(x0 = seq(2,9,6), y0 = out_male[ ,"ci.lb"], y1 = out_male[ ,"ci.ub"], code = 3,
+       angle = 90, length = 0.08, col = "#D55E00")
+arrows(x0 = seq(3,9,6), y0 = out_mixed[ ,"ci.lb"], y1 = out_mixed[ ,"ci.ub"], code = 3,
+       angle = 90, length = 0.08, col = "#E69F00")
+
+legend(x = "topright", legend = c("All jobs", "Female-typed jobs", "Male-typed jobs", 
+                                  "Gender-balanced jobs"), pch = c(16,16,16,16), 
+       col = c("black", "#009E73", "#D55E00", "#E69F00"), bty = "n")
+
+### Horizontal line at an odds ratio of 1
+abline(h = 1, col = "gray40", lwd = 1, lty = 2)
+```
+
+\newpage
+
+## Difference between studies conducted within and between organizations
+
+Test whether there is a difference between studies conducted within and between organizations by adding the moderator "WithinSubj" to model 1b. Between organizations is the reference category.
+
+```{r}
+expl_wvsb <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                    mods = ~ AuthFemProp + IneqIndex + Moderators + WithinSubj, 
+                    data = dat)
+expl_wvsb
+```
+
+\newpage
+
+## Alternative gender stereotype variables
+
+We ran additional exploratory analyses for hypotheses 2 and 3 (models 2a, 2b, 3a, and 3b) to study whether the results are robust to different types of coding techniques. 
+
+### Hypothesis 2: Model 2a
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped60"
+
+```{r, cache = TRUE}
+expl2a_NonFemaleTyped60 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ NonFemaleTyped60, data = dat)
+expl2a_NonFemaleTyped60
+```
+
+```{r, cache = TRUE}
+confint(expl2a_NonFemaleTyped60)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/dat$vi)
+X <- model.matrix(expl2a_NonFemaleTyped60)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl2a_NonFemaleTyped60$sigma2) / 
+  (sum(expl2a_NonFemaleTyped60$sigma2) + 
+     (expl2a_NonFemaleTyped60$k-expl2a_NonFemaleTyped60$p)/sum(diag(M)))
+```
+
+\newpage
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped65"
+
+```{r, cache = TRUE}
+expl2a_NonFemaleTyped65 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ NonFemaleTyped65, data = dat)
+expl2a_NonFemaleTyped65
+```
+
+```{r, cache = TRUE}
+confint(expl2a_NonFemaleTyped65)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/dat$vi)
+X <- model.matrix(expl2a_NonFemaleTyped65)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl2a_NonFemaleTyped65$sigma2) / 
+  (sum(expl2a_NonFemaleTyped65$sigma2) +
+     (expl2a_NonFemaleTyped65$k-expl2a_NonFemaleTyped65$p)/sum(diag(M)))
+```
+
+\newpage
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped70"
+
+```{r, cache = TRUE}
+expl2a_NonFemaleTyped70 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ NonFemaleTyped70, data = dat)
+expl2a_NonFemaleTyped70
+```
+
+```{r, cache = TRUE}
+confint(expl2a_NonFemaleTyped70)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/dat$vi)
+X <- model.matrix(expl2a_NonFemaleTyped70)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl2a_NonFemaleTyped70$sigma2) / 
+  (sum(expl2a_NonFemaleTyped70$sigma2) +
+     (expl2a_NonFemaleTyped70$k-expl2a_NonFemaleTyped70$p)/sum(diag(M)))
+```
+
+\newpage
+
+### Hypothesis 2: Model 2b
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped60"
+
+```{r, cache = TRUE}
+expl2b_NonFemaleTyped60 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ NonFemaleTyped60 + AuthFemProp + IneqIndex + Moderators, 
+                                  data = dat)
+expl2b_NonFemaleTyped60
+```
+
+```{r, cache = TRUE}
+confint(expl2b_NonFemaleTyped60)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/dat$vi)
+X <- model.matrix(expl2b_NonFemaleTyped60)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl2b_NonFemaleTyped60$sigma2) / 
+  (sum(expl2b_NonFemaleTyped60$sigma2) +
+     (expl2b_NonFemaleTyped60$k-expl2b_NonFemaleTyped60$p)/sum(diag(M)))
+```
+
+\newpage
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped65"
+
+```{r, cache = TRUE}
+expl2b_NonFemaleTyped65 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ NonFemaleTyped65 + AuthFemProp + IneqIndex + Moderators, 
+                                  data = dat)
+expl2b_NonFemaleTyped65
+```
+
+```{r, cache = TRUE}
+confint(expl2b_NonFemaleTyped65)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/dat$vi)
+X <- model.matrix(expl2b_NonFemaleTyped65)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl2b_NonFemaleTyped65$sigma2) /
+  (sum(expl2b_NonFemaleTyped65$sigma2) +
+     (expl2b_NonFemaleTyped65$k-expl2b_NonFemaleTyped65$p)/sum(diag(M)))
+```
+
+\newpage
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped70"
+
+```{r, cache = TRUE}
+expl2b_NonFemaleTyped70 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ NonFemaleTyped70 + AuthFemProp + IneqIndex + Moderators, 
+                                  data = dat)
+expl2b_NonFemaleTyped70
+```
+
+```{r, cache = TRUE}
+confint(expl2b_NonFemaleTyped70)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/dat$vi)
+X <- model.matrix(expl2b_NonFemaleTyped70)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl2b_NonFemaleTyped70$sigma2) / 
+  (sum(expl2b_NonFemaleTyped70$sigma2) +
+     (expl2b_NonFemaleTyped70$k-expl2b_NonFemaleTyped70$p)/sum(diag(M)))
+```
+
+\newpage
+
+### Hypothesis 3: Model 3a
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped60"
+
+```{r, cache = TRUE}
+### Create a subset of only studies with stereotypical male or gender-balanced jobs
+sub_expl <- subset(dat, dat$NonFemaleTyped60 == 1)
+
+expl3a_NonFemaleTyped60 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ ApplicYearMost_center, data = sub_expl)
+expl3a_NonFemaleTyped60
+```
+
+```{r}
+confint(expl3a_NonFemaleTyped60)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/sub_expl$vi)
+X <- model.matrix(expl3a_NonFemaleTyped60)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl3a_NonFemaleTyped60$sigma2) / 
+  (sum(expl3a_NonFemaleTyped60$sigma2) +
+     (expl3a_NonFemaleTyped60$k-expl3a_NonFemaleTyped60$p)/sum(diag(M)))
+```
+
+\newpage
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped65"
+
+```{r, cache = TRUE}
+### Create a subset of only studies with stereotypical male or gender-balanced jobs
+sub_expl <- subset(dat, dat$NonFemaleTyped65 == 1)
+
+expl3a_NonFemaleTyped65 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ ApplicYearMost_center, data = sub_expl)
+expl3a_NonFemaleTyped65
+```
+
+```{r}
+confint(expl3a_NonFemaleTyped65)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/sub_expl$vi)
+X <- model.matrix(expl3a_NonFemaleTyped65)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl3a_NonFemaleTyped65$sigma2) / 
+  (sum(expl3a_NonFemaleTyped65$sigma2) +
+     (expl3a_NonFemaleTyped65$k-expl3a_NonFemaleTyped65$p)/sum(diag(M)))
+```
+
+\newpage
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped70"
+
+```{r, cache = TRUE}
+### Create a subset of only studies with stereotypical male or gender-balanced jobs
+sub_expl <- subset(dat, dat$NonFemaleTyped70 == 1)
+
+expl3a_NonFemaleTyped70 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ ApplicYearMost_center, data = sub_expl)
+expl3a_NonFemaleTyped70
+```
+
+```{r}
+confint(expl3a_NonFemaleTyped70)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/sub_expl$vi)
+X <- model.matrix(expl3a_NonFemaleTyped70)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl3a_NonFemaleTyped70$sigma2) / 
+  (sum(expl3a_NonFemaleTyped70$sigma2) +
+     (expl3a_NonFemaleTyped70$k-expl3a_NonFemaleTyped70$p)/sum(diag(M)))
+```
+
+\newpage
+
+### Hypothesis 3: Model 3b
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped60"
+
+```{r, cache = TRUE}
+### Create a subset of only studies with stereotypical male or gender-balanced jobs
+sub_expl <- subset(dat, dat$NonFemaleTyped60 == 1)
+
+expl3b_NonFemaleTyped60 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                                    Moderators, data = sub_expl)
+expl3b_NonFemaleTyped60
+```
+
+```{r}
+confint(expl3b_NonFemaleTyped60)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/sub_expl$vi)
+X <- model.matrix(expl3b_NonFemaleTyped60)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl3b_NonFemaleTyped60$sigma2) / 
+  (sum(expl3b_NonFemaleTyped60$sigma2) +
+     (expl3b_NonFemaleTyped60$k-expl3b_NonFemaleTyped60$p)/sum(diag(M)))
+```
+
+\newpage
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped65"
+
+```{r, cache = TRUE}
+### Create a subset of only studies with stereotypical male or gender-balanced jobs
+sub_expl <- subset(dat, dat$NonFemaleTyped65 == 1)
+
+expl3b_NonFemaleTyped65 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                                    Moderators, data = sub_expl)
+expl3b_NonFemaleTyped65
+```
+
+```{r}
+confint(expl3b_NonFemaleTyped65)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/sub_expl$vi)
+X <- model.matrix(expl3b_NonFemaleTyped65)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl3b_NonFemaleTyped65$sigma2) / 
+  (sum(expl3b_NonFemaleTyped65$sigma2) +
+     (expl3b_NonFemaleTyped65$k-expl3b_NonFemaleTyped65$p)/sum(diag(M)))
+```
+
+\newpage
+
+Replacing the initial variable "NonFemaleTyped" with "NonFemaleTyped70"
+
+```{r, cache = TRUE}
+### Create a subset of only studies with stereotypical male or gender-balanced jobs
+sub_expl <- subset(dat, dat$NonFemaleTyped70 == 1)
+
+expl3b_NonFemaleTyped70 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                                  mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                                    Moderators, data = sub_expl)
+expl3b_NonFemaleTyped70
+```
+
+```{r}
+confint(expl3b_NonFemaleTyped70)
+```
+
+Residual $I^2$-statistic:
+```{r}
+W <- diag(1/sub_expl$vi)
+X <- model.matrix(expl3b_NonFemaleTyped70)
+M <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+sum(expl3b_NonFemaleTyped70$sigma2) / 
+  (sum(expl3b_NonFemaleTyped70$sigma2) +
+     (expl3b_NonFemaleTyped70$k-expl3b_NonFemaleTyped70$p)/sum(diag(M)))
+```
+
+\newpage
+
+## Exploratory analysis to study the effect of upper body strength (moderator "Physical")
+
+Fit the model without control variables
+
+```{r, cache = TRUE}
+expl_physical <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                        mods = ~ Physical, data = dat)
+expl_physical
+```
+
+```{r, cache = TRUE}
+confint(expl_physical)
+```
+
+Predicted score in terms of average odds ratio for a score of 0 on "Physical"
+```{r}
+pred_expl_physical0 <- predict(expl_physical, transf = exp, newmods = 0)
+pred_expl_physical0
+```
+
+Predicted score in terms of average odds ratio for a score of 1 on "Physical"
+```{r}
+pred_expl_physical1 <- predict(expl_physical, transf = exp, newmods = 1)
+pred_expl_physical1
+```
+
+\newpage
+
+## Exploratory analysis to study the effect of nurturance (moderator "Nurturance")
+
+Fit the model without control variables
+
+```{r, cache = TRUE}
+expl_nurturance <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                          mods = ~ Nurturance, data = dat)
+expl_nurturance
+```
+
+```{r, cache = TRUE}
+confint(expl_nurturance)
+```
+
+Predicted score in terms of average odds ratio for a score of 0 on "Nurturance"
+```{r}
+pred_expl_nurturance0 <- predict(expl_nurturance, transf = exp, newmods = 0)
+pred_expl_nurturance0
+```
+
+Predicted score in terms of average odds ratio for a score of 1 on "Nurturance"
+```{r}
+pred_expl_nurturance1 <- predict(expl_nurturance, transf = exp, newmods = 1)
+pred_expl_nurturance1
+```
+
+\newpage
+
+## Exploratory analysis to test whether the mean effect of studies for non-female typed jobs is different for studies whose applications were sent out between 2014-2016 and 2018-2020
+
+```{r, cache = TRUE}
+sub_20142016 <- subset(sub, ApplicYearMost >= 2014 & ApplicYearMost <= 2016)
+
+expl_20142016 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                        data = sub_20142016)
+
+sub_20182020 <- subset(sub, ApplicYearMost >= 2018 & ApplicYearMost <= 2020)
+
+expl_20182020 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                        data = sub_20182020)
+
+### Wald test of the difference between the two estimates
+zval <- (expl_20142016$b[1]-expl_20182020$b[1])/sqrt(expl_20142016$se^2+expl_20182020$se^2)
+zval
+2*pnorm(zval, lower.tail = FALSE) # Two-tailed p-value
+```
+
+\newpage
+
+## Exploratory analysis to study whether author gender ("AuthFemProp"), gender inequality index ("IneqIndex"), complexity of the study design ("Moderators"), education index ("EduIndex"), the natural logarithm of GDP (log of "GDP"), and social distance to US culture ("USADist") moderate the relationship between gender and callback
+
+```{r, cache = TRUE}
+expl_mods1 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                   mods = ~ AuthFemProp + IneqIndex + Moderators +  
+                     EduIndex + log(GDP) + USADist, data = dat)
+expl_mods1
+```
+
+```{r, cache = TRUE}
+confint(expl_mods1)
+```
+
+\newpage
+
+## Exploratory analysis to study whether author gender ("AuthFemProp"), complexity of the study design ("Moderators"), social distance to US culture ("USADist"), and human development ("HumanDev") moderate the relationship between gender and callback
+
+```{r, cache = TRUE}
+expl_mods2 <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                   mods = ~ AuthFemProp + Moderators + USADist + HumanDev, 
+                   data = dat)
+expl_mods2
+```
+
+```{r, cache = TRUE}
+confint(expl_mods2)
+```
+
+\newpage
+
+# Sensitivity analyses 
+
+## Dependent sampling errors
+
+```{r}
+### Create a subset of the independent effect sizes
+dat_sens <- subset(dat, dat$MultipDVs == 0)
+```
+
+### Hypothesis 1: Model 1a
+
+```{r, cache = TRUE}
+sens1a <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, data = dat_sens)
+sens1a
+```
+
+```{r, cache = TRUE}
+confint(sens1a)
+```
+
+\newpage
+
+### Hypothesis 1: Model 1b
+
+```{r, cache = TRUE}
+sens1b <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                 mods = ~ AuthFemProp + IneqIndex + Moderators, data = dat_sens)
+sens1b
+```
+
+```{r, cache = TRUE}
+confint(sens1b)
+```
+
+\newpage
+
+### Hypothesis 2: Model 2a
+
+```{r, cache = TRUE}
+sens2a <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                 mods = ~ NonFemaleTyped, data = dat_sens)
+sens2a
+```
+
+```{r, cache = TRUE}
+confint(sens2a)
+```
+
+\newpage
+
+### Hypothesis 2: Model 2b
+
+```{r, cache = TRUE}
+sens2b <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                 mods = ~ NonFemaleTyped + AuthFemProp + IneqIndex + Moderators, 
+                 data = dat_sens)
+sens2b
+```
+
+```{r, cache = TRUE}
+confint(sens2b)
+```
+
+\newpage
+
+### Hypothesis 3: Model 3a
+
+```{r, cache = TRUE}
+### Create a subset of only studies with stereotypical male or neutral jobs
+sub_sens <- subset(dat_sens, NonFemaleTyped == 1)
+
+sens3a <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                 mods = ~ ApplicYearMost_center, data = sub_sens)
+sens3a
+```
+
+```{r, cache = TRUE}
+confint(sens3a)
+```
+
+\newpage
+
+### Hypothesis 3: Model 3b
+
+```{r, cache = TRUE}
+sens3b <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                 mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                   Moderators, data = sub_sens)
+sens3b
+```
+
+```{r, cache = TRUE}
+confint(sens3b)
+```
+
+\newpage
+
+## Publication bias analyses: Only published studies
+
+These analyses show the results of applying the publication bias methods to only the studies that were published. The first publication bias analysis is an extension of Egger's regression test and PET-PEESE to multilevel meta-analysis. All the other publication bias methods are applied to univariate meta-analyses since these are not (yet) applicable to more complex meta-analysis models.
+
+```{r}
+### Take a subset of the effect sizes that are actually published
+pub <- subset(dat, Published == 1)
+```
+
+### Egger's test and PET-PEESE extended to multilevel meta-analysis
+
+```{r}
+res_ml_egger <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                       mods = ~ sqrt(vi), data = pub)
+res_ml_egger
+```
+
+The estimate of the intercept is the effect size corrected for small-study effects, because null hypothesis could not be rejected in PET-analysis with $\alpha$ = 0.1.
+
+\newpage
+
+### Contour-enhanced funnel plot
+```{r}
+res_pub <- rma(yi = yi, vi = vi, test = "knha", data = pub)
+funnel(res_pub, level = c(90, 95, 99), shade = c("white", "gray55", "gray75"), 
+       refline = 0, legend = TRUE, cex = 0.7)
+```
+
+\newpage
+
+### 3PSM
+
+Three-parameter selection model as proposed by Vevea and Hedges (1995)
+
+#### Cut point at p = 0.025 (right-tailed test)
+```{r}
+sel_model1 <- weightfunct(effect = pub$yi, v = pub$vi)
+sel_model1
+exp(sel_model1$output_adj$par[2])
+```
+
+\newpage
+
+#### Cut point at p = 0.975 (left-tailed test)
+```{r}
+sel_model2 <- weightfunct(effect = pub$yi, v = pub$vi, steps = c(0.975, 1))
+sel_model2
+exp(sel_model2$output_adj$par[2])
+```
+
+\newpage
+
+#### Cut points at p = 0.025 and 0.975 (two-tailed test)
+```{r}
+sel_model3 <- weightfunct(effect = pub$yi, v = pub$vi, steps = c(0.025, 0.975, 1))
+sel_model3
+exp(sel_model3$output_adj$par[2])
+```
+
+\newpage
+
+### P-uniform*
+
+P-uniform* method as proposed in van Aert & van Assen (2023).
+
+### Treating studies that are statistically significant based on a right-tailed test with $\alpha$ = 0.025 differently than nonsignificant studies
+
+```{r}
+puni1 <- puni_star(yi = pub$yi, vi = pub$vi, side = "right")
+puni1
+exp(puni1$est)
+```
+
+#### Treating studies that are statistically significant based on a left-tailed test with $\alpha$ = 0.025 differently than nonsignificant studies
+
+```{r}
+puni2 <- puni_star(yi = pub$yi, vi = pub$vi, side = "left")
+puni2
+exp(puni2$est)
+```
+
+\newpage
+
+### Percentage of statistically signifcant results in case of a two-tailed test with $\alpha$ = 0.05
+
+```{r}
+mean(dat$yi/sqrt(dat$vi) < qnorm(.025) | dat$yi/sqrt(dat$vi) > qnorm(.975))*100
+```
+
+\newpage
+
+## Publication bias analyses: All studies
+
+These analyses show the results of applying the publication bias methods to all studies (i.e., no distinction between published and unpublished studies). 
+
+### Egger's test and PET-PEESE extended to multilevel meta-analysis
+
+```{r}
+res_ml_egger_all <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                           mods = ~ sqrt(vi), data = dat)
+res_ml_egger_all
+```
+
+The estimate of the intercept is the effect size corrected for small-study effects, because null hypothesis could not be rejected in PET-analysis with $\alpha$ = 0.1.
+
+\newpage
+
+### Contour-enhanced funnel plot
+```{r}
+res_pub_all <- rma(yi = yi, vi = vi, test = "knha", data = dat)
+funnel(res_pub_all, level = c(90, 95, 99), shade = c("white", "gray55", "gray75"), 
+       refline = 0, legend = TRUE, cex = 0.7)
+```
+
+\newpage
+
+### 3PSM
+
+Three-parameter selection model as proposed by Vevea and Hedges (1995)
+
+#### Cut point at p = 0.025 (right-tailed test)
+```{r}
+sel_model1_all <- weightfunct(effect = dat$yi, v = dat$vi)
+sel_model1_all
+exp(sel_model1_all$output_adj$par[2])
+```
+
+\newpage
+
+#### Cut point at p = 0.975 (left-tailed test)
+```{r}
+sel_model2_all <- weightfunct(effect = dat$yi, v = dat$vi, steps = c(0.975, 1))
+sel_model2_all
+exp(sel_model2_all$output_adj$par[2])
+```
+
+\newpage
+
+#### Cut points at p = 0.025 and 0.975 (two-tailed test)
+```{r}
+sel_model3_all <- weightfunct(effect = dat$yi, v = dat$vi, steps = c(0.025, 0.975, 1))
+sel_model3_all
+exp(sel_model3_all$output_adj$par[2])
+```
+
+\newpage
+
+### P-uniform*
+
+P-uniform* method as proposed in van Aert & van Assen (2021).
+
+### Treating studies that are statistically significant based on a right-tailed test with $\alpha$ = 0.025 differently than nonsignificant studies
+
+```{r}
+puni1_all <- puni_star(yi = dat$yi, vi = dat$vi, side = "right")
+puni1_all
+exp(puni1_all$est)
+```
+
+#### Treating studies that are statistically significant based on a left-tailed test with $\alpha$ = 0.025 differently than nonsignificant studies
+
+```{r}
+puni2_all <- puni_star(yi = dat$yi, vi = dat$vi, side = "left")
+puni2_all
+exp(puni2_all$est)
+```
+
+\newpage
+
+## Leave-one-out analysis
+
+### Hypothesis 1: Model 1a
+
+```{r, cache = TRUE, eval = eval}
+res1a_leave <- matrix(NA, nrow = nrow(dat), ncol = 3, 
+                      dimnames = list(1:nrow(dat), 
+                                      c("est", "z-value", "p-value")))
+
+for (i in 1:nrow(dat))
+{
+  tmp <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, data = dat[-i, ])
+  
+  res1a_leave[i, ] <- c(tmp$b["intrcpt", 1], tmp$zval[1], tmp$pval[1])
+}
+
+summary(res1a_leave[ ,"est"]) # Summary statistics average log odds ratio
+summary(res1a_leave[ ,"z-value"]) # Summary statistics z-value
+summary(res1a_leave[ ,"p-value"]) # Summary statistics p-value
+mean(res1a_leave[ ,"p-value"] < 0.05) # Percentage statistically significant effect
+```
+
+```{r, echo = FALSE, fig.height = 10, eval = eval}
+par(mfrow = c(3,1))
+hist(res1a_leave[ ,"est"], xlab = "Estimate", main = "Average log odds ratio", 
+     las = 1, breaks = 100, xaxt = "n", xlim = c(-0.095, -0.075))
+axis(side = 1, at = seq(-0.095, -0.075, 0.005))
+hist(res1a_leave[ ,"z-value"], xlab = "z-value average log odds ratio", 
+     main = "z-value", las = 1, breaks = 100, )
+hist(res1a_leave[ ,"p-value"], xlab = "p-value average log odds ratio", main = "p-value", las = 1, breaks = 100)
+par(mfrow = c(1,1))
+```
+
+\newpage
+
+### Hypothesis 1: Model 1b
+
+```{r, cache = TRUE, eval = eval}
+res1b_leave <- matrix(NA, nrow = nrow(dat), ncol = 3, 
+                      dimnames = list(1:nrow(dat), 
+                                      c("est", "z-value", "p-value")))
+
+for (i in 1:nrow(dat))
+{
+  tmp <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                mods = ~ AuthFemProp + IneqIndex + Moderators, data = dat[-i, ])
+  
+  res1b_leave[i, ] <- c(tmp$b["intrcpt", 1], tmp$zval[1], tmp$pval[1])
+}
+
+summary(res1b_leave[ ,"est"]) # Summary statistics average log odds ratio
+summary(res1b_leave[ ,"z-value"]) # Summary statistics z-value
+summary(res1b_leave[ ,"p-value"]) # Summary statistics p-value
+mean(res1b_leave[ ,"p-value"] < 0.05) # Percentage statistically significant effect
+```
+
+```{r, echo = FALSE, fig.height = 10, eval = eval}
+par(mfrow = c(3,1))
+hist(res1b_leave[ ,"est"], xlab = "Estimate", main = "Average log odds ratio", breaks = 100)
+hist(res1b_leave[ ,"z-value"], xlab = "z-value average log odds ratio", main = "z-value", breaks = 100)
+hist(res1b_leave[ ,"p-value"], xlab = "p-value average log odds ratio", main = "p-value", breaks = 100)
+par(mfrow = c(1,1))
+```
+
+\newpage
+
+### Hypothesis 2: Model 2a
+
+```{r, cache = TRUE, eval = eval}
+res2a_leave <- matrix(NA, nrow = nrow(dat), ncol = 3, 
+                      dimnames = list(1:nrow(dat), 
+                                      c("est", "z-value", "p-value")))
+
+for (i in 1:nrow(dat))
+{
+  tmp <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                mods = ~ NonFemaleTyped, data = dat[-i, ])
+  
+  res2a_leave[i, ] <- c(tmp$b["NonFemaleTyped", 1], tmp$zval[2], tmp$pval[2])
+}
+
+summary(res2a_leave[ ,"est"]) # Summary statistics effect of NonFemaleTyped
+summary(res2a_leave[ ,"z-value"]) # Summary statistics z-value
+summary(res2a_leave[ ,"p-value"]) # Summary statistics p-value
+mean(res2a_leave[ ,"p-value"] < 0.05) # Percentage statistically significant effect
+```
+
+```{r, echo = FALSE, fig.height = 10, eval = eval}
+par(mfrow = c(3,1))
+hist(res2a_leave[ ,"est"], xlab = "Estimate", main = "Effect of NonFemaleTyped", breaks = 100)
+hist(res2a_leave[ ,"z-value"], xlab = "z-value effect of NonFemaleTyped", main = "z-value", breaks = 100)
+hist(res2a_leave[ ,"p-value"], xlab = "p-value effect of NonFemaleTyped", main = "p-value", breaks = 100)
+par(mfrow = c(1,1))
+```
+
+\newpage
+
+### Hypothesis 2: Model 2b
+
+```{r, cache = TRUE, eval = eval}
+res2b_leave <- matrix(NA, nrow = nrow(dat), ncol = 3, 
+                      dimnames = list(1:nrow(dat), 
+                                      c("est", "z-value", "p-value")))
+
+for (i in 1:nrow(dat))
+{
+  tmp <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                mods = ~ NonFemaleTyped + AuthFemProp + IneqIndex + Moderators, 
+                data = dat[-i, ])
+  
+  res2b_leave[i, ] <- c(tmp$b["NonFemaleTyped", 1], tmp$zval[2], tmp$pval[2])
+}
+
+summary(res2b_leave[ ,"est"]) # Summary statistics effect of NonFemaleTyped
+summary(res2b_leave[ ,"z-value"]) # Summary statistics z-value
+summary(res2b_leave[ ,"p-value"]) # Summary statistics p-value
+mean(res2b_leave[ ,"p-value"] < 0.05) # Percentage statistically significant effect
+```
+
+```{r, echo = FALSE, fig.height = 10, eval = eval}
+par(mfrow = c(3,1))
+hist(res2b_leave[ ,"est"], xlab = "Estimate", main = "Effect of NonFemaleTyped", breaks = 100)
+hist(res2b_leave[ ,"z-value"], xlab = "z-value effect of NonFemaleTyped", main = "z-value", breaks = 100)
+hist(res2b_leave[ ,"p-value"], xlab = "p-value effect of NonFemaleTyped", main = "p-value", breaks = 100)
+par(mfrow = c(1,1))
+```
+
+\newpage
+
+### Hypothesis 3: Model 3a
+
+```{r, cache = TRUE, eval = eval}
+res3a_leave <- matrix(NA, nrow = nrow(sub), ncol = 3, 
+                      dimnames = list(1:nrow(sub), 
+                                      c("est", "z-value", "p-value")))
+
+for (i in 1:nrow(sub))
+{
+  tmp <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                mods = ~ ApplicYearMost_center, data = sub[-i, ])
+  
+  res3a_leave[i, ] <- c(tmp$b["ApplicYearMost_center", 1], tmp$zval[2], tmp$pval[2])
+}
+
+summary(res3a_leave[ ,"est"]) # Summary statistics of effect ApplicYearMost_center
+summary(res3a_leave[ ,"z-value"]) # Summary statistics z-value
+summary(res3a_leave[ ,"p-value"]) # Summary statistics p-value
+mean(res3a_leave[ ,"p-value"] < 0.05) # Percentage statistically significant effect
+```
+
+```{r, echo = FALSE, fig.height = 10, eval = eval}
+par(mfrow = c(3,1))
+hist(res3a_leave[ ,"est"], xlab = "Estimate", main = "Effect of ApplicYearMost_center", breaks = 100)
+hist(res3a_leave[ ,"z-value"], xlab = "z-value of ApplicYearMost_center", main = "z-value", breaks = 100)
+hist(res3a_leave[ ,"p-value"], xlab = "p-value of ApplicYearMost_center", main = "p-value", breaks = 100)
+par(mfrow = c(1,1))
+```
+
+Note that the effect size with UniqueID 15A is important for the negative relationship between "ApplicYearmost_center" and the average log odds ratio. This is the effect size based on the data collected in 1978 (odds ratio of `r 1/exp(0.9315)`. The output below shows a sensitivity analysis where this study was omitted from the analyses. The effect of "ApplicYearMost_center" was no longer statistically significant if this effect size is omitted.
+
+```{r, cache = TRUE}
+ind <- which(sub$UniqueID == "15A")
+sub[ind, ] # Data of effect size with UniqueID 15A
+
+sub_no_15A <- sub[-ind, ] # Remove this study from the data
+
+res3a_no_15A <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                       mods = ~ ApplicYearMost_center, data = sub_no_15A)
+res3a_no_15A
+```
+
+\newpage
+
+### Hypothesis 3: Model 3b
+
+```{r, cache = TRUE, eval = eval}
+res3b_leave <- matrix(NA, nrow = nrow(sub), ncol = 3, 
+                      dimnames = list(1:nrow(sub), 
+                                      c("est", "z-value", "p-value")))
+
+for (i in 1:nrow(sub))
+{
+  tmp <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                  Moderators, data = sub[-i, ])
+  
+  res3b_leave[i, ] <- c(tmp$b["ApplicYearMost_center", 1], tmp$zval[2], tmp$pval[2])
+}
+
+summary(res3b_leave[ ,"est"]) # Summary statistics of effect ApplicYearMost_center
+summary(res3b_leave[ ,"z-value"]) # Summary statistics z-value
+summary(res3b_leave[ ,"p-value"]) # Summary statistics p-value
+mean(res3b_leave[ ,"p-value"] < 0.05) # Percentage statistically significant effect
+```
+
+```{r, echo = FALSE, fig.height = 10, eval = eval}
+par(mfrow = c(3,1))
+hist(res3b_leave[ ,"est"], xlab = "Estimate", main = "Effect of ApplicYearMost_center", breaks = 100)
+hist(res3b_leave[ ,"z-value"], xlab = "z-value of ApplicYearMost_center", main = "z-value", breaks = 100)
+hist(res3b_leave[ ,"p-value"], xlab = "p-value of ApplicYearMost_center", main = "p-value", breaks = 100)
+par(mfrow = c(1,1))
+```
+
+Note that the effect size with UniqueID 15A is important for the negative relationship between "ApplicYearmost_center" and the average log odds ratio. This is the effect size based on the data collected in 1978 (odds ratio of `r 1/exp(0.9315)`. The output below shows a sensitivity analysis where this study was omitted from the analyses. The effect of "ApplicYearMost_center" was no longer statistically significant if this effect size is omitted.
+
+```{r, cache = TRUE}
+sub[ind, ] # Data of effect size with UniqueID 15A
+
+res3b_no_15A <- rma.mv(yi = yi, V = vi, random = ~ 1 | StudyID/UniqueID, 
+                       mods = ~ ApplicYearMost_center + AuthFemProp + IneqIndex + 
+                         Moderators, data = sub_no_15A)
+res3b_no_15A
+```
+
+\newpage
+
+# Model checking: Multilevel meta-analysis
+
+## Hypothesis 1: Model 1a
+
+### Normality assumptions
+```{r, cache = TRUE, eval = eval}
+qqnorm(rstandard(res1a_ml)$z)
+lines(x = -4:4, y = -4:4, lwd = 2)
+```
+
+### Check for outlying effect sizes
+```{r, cache = TRUE, eval = eval}
+rstu1a_ml <- rstudent(res1a_ml, parallel = "snow", ncpus = 3)
+rstu1a_ml
+summary(rstu1a_ml$z)
+```
+
+### Weight of each effect size in the meta-analysis
+```{r, cache = TRUE, eval = eval}
+summary(weights(res1a_ml))
+```
+
+\newpage
+
+## Hypothesis 1: Model 1b
+
+### Normality assumptions
+```{r, cache = TRUE, eval = eval}
+qqnorm(rstandard(res1b_ml)$z)
+lines(x = -4:4, y = -4:4, lwd = 2)
+```
+
+### Check for outlying effect sizes
+```{r, cache = TRUE, eval = eval}
+rstu1b_ml <- rstudent(res1b_ml, parallel = "snow", ncpus = 3)
+rstu1b_ml
+summary(rstu1b_ml$z)
+```
+
+### Weight of each effect size in the meta-analysis
+```{r, cache = TRUE, eval = eval}
+summary(weights(res1b_ml))
+```
+
+\newpage
+
+## Hypothesis 2: Model 2a
+
+### Normality assumptions
+```{r, cache = TRUE, eval = eval}
+qqnorm(rstandard(res2a_ml)$z)
+lines(x = -4:4, y = -4:4, lwd = 2)
+```
+
+### Check for outlying effect sizes
+```{r, cache = TRUE, eval = eval}
+rstu2a_ml <- rstudent(res2a_ml, parallel = "snow", ncpus = 3)
+rstu2a_ml
+summary(rstu2a_ml$z)
+```
+
+### Weight of each effect size in the meta-analysis
+```{r, cache = TRUE, eval = eval}
+summary(weights(res2a_ml))
+```
+
+\newpage
+
+## Hypothesis 2: Model 2b
+
+### Normality assumptions
+```{r, cache = TRUE, eval = eval}
+qqnorm(rstandard(res2b_ml)$z)
+lines(x = -4:4, y = -4:4, lwd = 2)
+```
+
+### Check for outlying effect sizes
+```{r, cache = TRUE, eval = eval}
+rstu2b_ml <- rstudent(res2b_ml, parallel = "snow", ncpus = 3)
+rstu2b_ml
+summary(rstu2b_ml$z)
+```
+
+### Weight of each effect size in the meta-analysis
+```{r, cache = TRUE, eval = eval}
+summary(weights(res2b_ml))
+```
+
+\newpage
+
+## Hypothesis 3: Model 3a
+
+### Normality assumptions
+```{r, cache = TRUE, eval = eval}
+qqnorm(rstandard(res3a_ml)$z)
+lines(x = -4:4, y = -4:4, lwd = 2)
+```
+
+### Check for outlying effect sizes
+```{r, cache = TRUE, eval = eval}
+rstu3a_ml <- rstudent(res3a_ml, parallel = "snow", ncpus = 3)
+rstu3a_ml
+summary(rstu3a_ml$z)
+```
+
+### Weight of each effect size in the meta-analysis
+```{r, cache = TRUE, eval = eval}
+summary(weights(res3a_ml))
+```
+
+\newpage
+
+## Hypothesis 3: Model 3b
+
+### Normality assumptions
+```{r, cache = TRUE, eval = eval}
+qqnorm(rstandard(res3b_ml)$z)
+lines(x = -4:4, y = -4:4, lwd = 2)
+```
+
+### Check for outlying effect sizes
+```{r, cache = TRUE, eval = eval}
+rstu3b_ml <- rstudent(res3b_ml, parallel = "snow", ncpus = 3)
+rstu3b_ml
+summary(rstu3b_ml$z)
+```
+
+### Weight of each effect size in the meta-analysis
+```{r, cache = TRUE, eval = eval}
+summary(weights(res3b_ml))
+```
+
+\newpage
+
+\newpage
+
+## Hypothesis 2: Model 2a with "NonFemaleTyped65" as moderator
+
+### Normality assumptions
+```{r, cache = TRUE, eval = eval}
+qqnorm(rstandard(expl2a_NonFemaleTyped65)$z)
+lines(x = -4:4, y = -4:4, lwd = 2)
+```
+
+### Check for outlying effect sizes
+```{r, cache = TRUE, eval = eval}
+rstu_expl2a_NonFemaleTyped65 <- rstudent(expl2a_NonFemaleTyped65, parallel = "snow", ncpus = 3)
+rstu_expl2a_NonFemaleTyped65
+summary(rstu_expl2a_NonFemaleTyped65$z)
+```
+
+### Weight of each effect size in the meta-analysis
+```{r, cache = TRUE, eval = eval}
+summary(weights(expl2a_NonFemaleTyped65))
+```
+
+\newpage
+
+## Hypothesis 2: Model 2b with "NonFemaleTyped65" as moderator
+
+### Normality assumptions
+```{r, cache = TRUE, eval = eval}
+qqnorm(rstandard(expl2b_NonFemaleTyped65)$z)
+lines(x = -4:4, y = -4:4, lwd = 2)
+```
+
+### Check for outlying effect sizes
+```{r, cache = TRUE, eval = eval}
+rstu_expl2b_NonFemaleTyped65 <- rstudent(expl2b_NonFemaleTyped65, parallel = "snow", ncpus = 3)
+rstu_expl2b_NonFemaleTyped65
+summary(rstu_expl2b_NonFemaleTyped65$z)
+```
+
+### Weight of each effect size in the meta-analysis
+```{r, cache = TRUE, eval = eval}
+summary(weights(expl2b_NonFemaleTyped65))
+```
+
+\newpage
+
+## Hypothesis 3: Model 3a with "NonFemaleTyped65" as moderator
+
+### Normality assumptions
+```{r, cache = TRUE, eval = eval}
+qqnorm(rstandard(expl3a_NonFemaleTyped65)$z)
+lines(x = -4:4, y = -4:4, lwd = 2)
+```
+
+### Check for outlying effect sizes
+```{r, cache = TRUE, eval = eval}
+rstu_expl3a_NonFemaleTyped65 <- rstudent(expl3a_NonFemaleTyped65, parallel = "snow", ncpus = 3)
+rstu_expl3a_NonFemaleTyped65
+summary(rstu_expl3a_NonFemaleTyped65$z)
+```
+
+### Weight of each effect size in the meta-analysis
+```{r, cache = TRUE, eval = eval}
+summary(weights(expl3a_NonFemaleTyped65))
+```
+
+\newpage
+
+## Hypothesis 3: Model 3b with "NonFemaleTyped65" as moderator
+
+### Normality assumptions
+```{r, cache = TRUE, eval = eval}
+qqnorm(rstandard(expl3b_NonFemaleTyped65)$z)
+lines(x = -4:4, y = -4:4, lwd = 2)
+```
+
+### Check for outlying effect sizes
+```{r, cache = TRUE, eval = eval}
+rstu_expl3b_NonFemaleTyped65 <- rstudent(expl3b_NonFemaleTyped65, parallel = "snow", ncpus = 3)
+rstu_expl3b_NonFemaleTyped65
+summary(rstu_expl3b_NonFemaleTyped65$z)
+```
+
+### Weight of each effect size in the meta-analysis
+```{r, cache = TRUE, eval = eval}
+summary(weights(expl3b_NonFemaleTyped65))
+```
+
+\newpage
+
+# Session information
+```{r}
+sessionInfo()
+```

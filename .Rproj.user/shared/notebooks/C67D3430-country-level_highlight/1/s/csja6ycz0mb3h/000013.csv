@@ -1,0 +1,5 @@
+"0","## Load data
+dat <- readxl::read_excel(""Data.xlsx"", sheet = ""Data"")
+"
+"2","Error: Sheet 'Data' not found
+"
