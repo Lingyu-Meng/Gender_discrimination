@@ -63,9 +63,9 @@ One can see that the mean odd rate of different countries or regions varies a lo
 colorset <- dat_country %>% 
   select(DataCounty)
 # highlight cyprus
-colorset$highlights <- "grey"
-colorset$highlights[colorset$DataCounty == "Cyprus"] <- "red"
+colorset$highlights <- "Others"
 dat_cyprus <- left_join(dat, colorset, by = "DataCounty")
+dat_cyprus$highlights[dat_cyprus$DataCounty == "Cyprus"] <- "Cyprus"
 # visualize cyprus
 fig_cyprus <- dat_cyprus %>%
   ggplot(aes(x = ApplicYearMost, y = OR, color = highlights, size = N)) +
@@ -75,9 +75,8 @@ fig_cyprus <- dat_cyprus %>%
   labs(title = "Highlight Cyprus", x = "Year", y = "Odd rate")
 fig_cyprus
 # highlight peru
-colorset$highlights <- "grey"
-colorset$highlights[colorset$DataCounty == "Peru"] <- "red"
 dat_peru <- left_join(dat, colorset, by = "DataCounty")
+dat_peru$highlights[dat_peru$DataCounty == "Peru"] <- "Peru"
 # visualize peru
 fig_peru <- dat_peru %>%
   ggplot(aes(x = ApplicYearMost, y = OR, color = highlights, size = N)) +
@@ -87,9 +86,8 @@ fig_peru <- dat_peru %>%
   labs(title = "Highlight Peru", x = "Year", y = "Odd rate")
 fig_peru
 # highlight UK
-colorset$highlights <- "grey"
-colorset$highlights[colorset$DataCounty == "United Kingdom"] <- "red"
 dat_uk <- left_join(dat, colorset, by = "DataCounty")
+dat_uk$highlights[dat_uk$DataCounty == "United Kingdom"] <- "United Kingdom"
 # visualize UK
 fig_uk <- dat_uk %>%
   ggplot(aes(x = ApplicYearMost, y = OR, color = highlights, size = N)) +
@@ -99,9 +97,8 @@ fig_uk <- dat_uk %>%
   labs(title = "Highlight UK", x = "Year", y = "Odd rate")
 fig_uk
 # highlight US
-colorset$highlights <- "grey"
-colorset$highlights[colorset$DataCounty == "United States"] <- "red"
 dat_us <- left_join(dat, colorset, by = "DataCounty")
+dat_us$highlights[dat_us$DataCounty == "United States"] <- "United States"
 # visualize US
 fig_us <- dat_us %>%
   ggplot(aes(x = ApplicYearMost, y = OR, color = highlights, size = N)) +
@@ -111,9 +108,8 @@ fig_us <- dat_us %>%
   labs(title = "Highlight US", x = "Year", y = "Odd rate")
 fig_us
 # highlight CN
-colorset$highlights <- "grey"
-colorset$highlights[colorset$DataCounty == "China"] <- "red"
 dat_cn <- left_join(dat, colorset, by = "DataCounty")
+dat_cn$highlights[dat_cn$DataCounty == "China"] <- "China"
 # visualize CN
 fig_cn <- dat_cn %>%
   ggplot(aes(x = ApplicYearMost, y = OR, color = highlights, size = N)) +
@@ -122,6 +118,39 @@ fig_cn <- dat_cn %>%
   theme_cowplot() +
   labs(title = "Highlight China", x = "Year", y = "Odd rate")
 fig_cn
+# highlight BR
+dat_br <- left_join(dat, colorset, by = "DataCounty")
+dat_br$highlights[dat_br$DataCounty == "Brazil"] <- "Brazil"
+# visualize BR
+fig_br <- dat_br %>%
+  ggplot(aes(x = ApplicYearMost, y = OR, color = highlights, size = N)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
+  theme_cowplot() +
+  labs(title = "Highlight Brazil", x = "Year", y = "Odd rate")
+fig_br
+# highlight JM
+dat_jm <- left_join(dat, colorset, by = "DataCounty")
+dat_jm$highlights[dat_jm$DataCounty == "Jamaica"] <- "Jamaica"
+# visualize JM
+fig_jm <- dat_jm %>%
+  ggplot(aes(x = ApplicYearMost, y = OR, color = highlights, size = N)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
+  theme_cowplot() +
+  labs(title = "Highlight Jamaica", x = "Year", y = "Odd rate")
+fig_jm
+# highlight FI
+dat_fi <- left_join(dat, colorset, by = "DataCounty")
+dat_fi$highlights[dat_fi$DataCounty == "Finland"] <- "Finland"
+# visualize FI
+fig_fi <- dat_fi %>%
+  ggplot(aes(x = ApplicYearMost, y = OR, color = highlights, size = N)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
+  theme_cowplot() +
+  labs(title = "Highlight Finland", x = "Year", y = "Odd rate")
+fig_fi
 ```
 
 to be continued...
